@@ -9,38 +9,27 @@
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE ViewPatterns               #-}
 
-
 module Main where
 
-import Control.Monad.Trans.Class
 import           Control.Applicative
-import           Control.Concurrent
 import           Control.Concurrent.STM.TVar
-import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
 import           Control.Monad.State (StateT (..), evalStateT)
 import           Control.Monad.State.Class
+import           Control.Monad.Trans.Class
 import           Data.Bifunctor
 import qualified Data.ByteString.Char8 as B
-import           Data.Dynamic
-import           Data.Foldable
-import           Data.Functor.Identity
-import           Data.IORef
-import qualified Data.Map as M
 import           Data.Proxy
-import           Debug.Trace
 import           Network.Wai.Handler.Warp
 import           Network.WebSockets
 import           Servant
 import           Servant.API.WebSocket
 import           Servant.HTML.Blaze
-import           Servant.Server
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 import           Text.Blaze (preEscapedString, Markup)
 import           Text.InterpolatedString.Perl6
-import           Text.RawString.QQ
 
 
 data Input a = Input
@@ -97,7 +86,7 @@ slider l u v = Suave $ do
 
 
 main :: IO ()
-main = suavemente $ liftA2 (+) (slider 0 10 5) (slider 0 10 5)
+main = suavemente $ liftA2 (+) (slider @Int 0 10 5) (slider 0 10 5)
 
 suavemente :: Show a => Suave a -> IO ()
 suavemente w = do
@@ -139,9 +128,9 @@ htmlPage a = preEscapedString
 
 genName :: MonadState Int m => m String
 genName = do
-  state <- get
+  s <- get
   modify (+1)
-  pure $ show state
+  pure $ show s
 
 
 makeId :: String -> String
