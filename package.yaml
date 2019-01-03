@@ -39,6 +39,8 @@ dependencies:
 - blaze-markup
 - raw-strings-qq
 - interpolatedstring-perl6
+- streaming
+- stm
 
 
 library:
