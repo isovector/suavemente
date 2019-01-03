@@ -19,6 +19,7 @@ import           Control.Monad.State (StateT (..), evalStateT)
 import           Control.Monad.State.Class
 import           Control.Monad.Trans.Class
 import           Data.Bifunctor
+import           Data.Bool
 import qualified Data.ByteString.Char8 as B
 import           Data.Proxy
 import           Network.Wai.Handler.Warp
@@ -77,16 +78,32 @@ getEvents t n update
            )
 
 
-slider :: (Show a, Num a, Read a) => a -> a -> a -> Suave a
-slider l u v = Suave $ do
+mkInput :: Read a => (String -> a -> Markup) -> a -> Suave a
+mkInput f a = Suave $ do
   name <- genName
-  let mu = [qc|<input id="{name}" onchange="onChangeFunc(event)" type="range" min="{l}" max="{u}" value="{v}"><br/>|]
-  tvar <- lift $ newTVar v
-  pure $ Input (preEscapedString mu) (getEvents tvar name) (readTVar tvar)
+  tvar <- lift $ newTVar a
+  pure $ Input (f name a) (getEvents tvar name) (readTVar tvar)
+
+
+slider :: (Show a, Num a, Read a) => a -> a -> a -> Suave a
+slider l u = mkInput $ \name v ->
+  preEscapedString
+    [qc|<input id="{name}" onchange="onChangeFunc(event)" type="range" min="{l}" max="{u}" value="{v}"><br/>|]
+
+
+checkbox :: Bool -> Suave Bool
+checkbox = mkInput $ \name v ->
+  preEscapedString
+    [qc|<input id="{name}" onchange="onChangeFunc(event)" type="checkbox" {bool "" "checked='checked'" v}><br/>|]
+
+textbox :: String -> Suave String
+textbox = mkInput $ \name v ->
+  preEscapedString
+    [qc|<input id="{name}" onchange="onChangeFunc(event)" type="text" value="{v}"><br/>|]
 
 
 main :: IO ()
-main = suavemente $ liftA2 (+) (slider @Int 0 10 5) (slider 0 10 5)
+main = suavemente $ (,,) <$> (slider @Int 0 10 5) <*> (slider 0 10 5) <*> textbox "sandy"
 
 suavemente :: Show a => Suave a -> IO ()
 suavemente w = do
@@ -107,6 +124,7 @@ socketHandler v f c
   = liftIO
   . S.effects
   . f (sendTextData c . B.pack . show =<< atomically v)
+  . S.mapM (liftA2 (>>) print pure)
   . S.map (second tail . span (/= ' '))
   . S.repeatM
   . fmap B.unpack
@@ -118,7 +136,6 @@ htmlPage a = preEscapedString
   [qc|
   <script>
      let ws = new WebSocket("ws://localhost:8080/suavemente");
-     ws.onopen = (e) => ws.send("Suave!");
      ws.onmessage = (e) => document.getElementById("result").innerHTML = e.data;
      let onChangeFunc = (e) => ws.send(e.target.id + " " + e.target.value)
   </script>
