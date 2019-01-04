@@ -1,6 +1,7 @@
 {-# LANGUAGE ApplicativeDo              #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE ExtendedDefaultRules       #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
@@ -12,6 +13,8 @@
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
 {-# LANGUAGE ViewPatterns               #-}
+
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module Main where
 
@@ -27,8 +30,6 @@ import           Data.Bifunctor
 import           Data.Bool
 import qualified Data.ByteString.Char8 as B
 import           Data.Char
-import           Data.Coerce
-import qualified Data.Colour as D
 import           Data.Data.Lens
 import           Data.Proxy
 import           Diagrams.Backend.SVG
@@ -134,7 +135,7 @@ realSlider l u s = mkInput $ \name v ->
 checkbox :: Bool -> Suave Bool
 checkbox = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" oninput="onChangeBoolFunc(event)" type="checkbox" {bool "" "checked='checked'" v}><br/>|]
+    [qc|<input id="{name}" oninput="onChangeBoolFunc(event)" type="checkbox" {bool ("" :: String) "checked='checked'" v}><br/>|]
 
 textbox :: String -> Suave String
 textbox = mkInput $ \name v ->
@@ -148,9 +149,14 @@ main = suavemente $ do
   r <- realSlider 0 1 0.05 1
   g <- realSlider 0 1 0.05 1
   b <- realSlider 0 1 0.05 1
-  x <- slider 0 255 255
-  y <- slider 0 255 255
-  pure (D.circle rad # D.fc (D.sRGB r g b) # D.translate (D.r2 (x, y)) :: D.Diagram B)
+  x <- slider 0 20 10
+  y <- slider 0 20 10
+  pure (
+    D.circle rad
+            # D.fc (D.sRGB r g b)
+            # D.translate (D.r2 (x, y))
+            # D.rectEnvelope (D.p2 (0, 0)) (D.r2 (20, 20))
+    :: D.Diagram B)
 
 suavemente :: ToMarkup a => Suave a -> IO ()
 suavemente w = do
@@ -172,7 +178,7 @@ socketHandler v f c
   . S.effects
   . f (sendTextData c . B.pack . showMarkup =<< atomically v)
   . S.mapM (liftA2 (>>) print pure)
-  . S.map (second tail . span (/= ' '))
+  . S.map (second (drop 1) . span (/= ' '))
   . S.repeatM
   . fmap B.unpack
   $ receiveData c
