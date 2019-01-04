@@ -5,3 +5,5 @@
 First release!
 
 ## Unreleased changes
+
+- New inputs: `dropdown` and `enumDropdown`

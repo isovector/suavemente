@@ -27,6 +27,8 @@ module Web.Suavemente
   , checkbox
   , slider
   , realSlider
+  , dropdown
+  , enumDropdown
 
     -- * Making New Inputs
   , mkInput
@@ -40,6 +42,7 @@ module Web.Suavemente
   ) where
 
 import           Control.Applicative (liftA2)
+import           Control.Arrow ((&&&))
 import           Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
 import           Control.Lens hiding ((#))
 import           Control.Monad.IO.Class (liftIO)
@@ -223,6 +226,38 @@ textbox label = mkInput $ \name v ->
         </td><td>
         <input id="{name}" oninput="onChangeStrFunc(event)" type="text" value="{v}" autocomplete="off">
         </td></tr>|]
+
+
+------------------------------------------------------------------------------
+-- | Create an input driven by an HTML select.
+dropdown
+    :: (Read a, ToMarkup a)
+    => String  -- ^ label
+    -> [(String, a)]
+    -> a
+    -> Suave a
+dropdown label opts = mkInput $ \name _ -> preEscapedString $
+  mconcat $
+    [ [qc|<tr><td><label for="{name}">{label}</label></td><td>|]
+    , [qc|<select name="{name}" onchange="onChangeFunc(event)">|]
+    ] ++
+    fmap (\(oname, oval) -> [qc|<option value="{showMarkup oval}">{oname}</option>|])
+         opts
+      ++
+    [ [q|</select>|]
+    , [q|</td></tr>|]
+    ]
+
+
+------------------------------------------------------------------------------
+-- | Create an input for enums driven by an HTML select.
+enumDropdown
+    :: (Read a, ToMarkup a, Enum a, Bounded a)
+    => String  -- ^ label
+    -> a
+    -> Suave a
+enumDropdown label =
+  dropdown label $ fmap (showMarkup &&& id) [minBound .. maxBound]
 
 
 ------------------------------------------------------------------------------
