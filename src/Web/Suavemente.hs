@@ -16,7 +16,7 @@
 
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
-module Lib
+module Web.Suavemente
   ( -- * Primary Stuff
     Suave ()
   , Input ()

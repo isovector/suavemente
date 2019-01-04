@@ -1,52 +1,43 @@
 name:                suavemente
 version:             0.1.0.0
-github:              "githubuser/suavemente"
+github:              "isovector/suavemente"
 license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2019 Author name here"
+author:              "Sandy Maguire"
+maintainer:          "sandy@sandymaguire.me"
+copyright:           "2019 Sandy Maguire"
 
 extra-source-files:
 - README.md
 - ChangeLog.md
 
-# Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
+synopsis:            An applicative functor that seamlessly talks to HTML inputs.
+category:            Web
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/suavemente#readme>
+description:         Please see the README on GitHub at <https://github.com/isovector/suavemente#readme>
 
 dependencies:
 - base >= 4.7 && < 5
-- servant
-- servant-server
-- servant-client
-- servant-websockets
-- websockets
-- servant-js
-- servant-blaze
-- mtl
-- transformers
-- containers
-- text
-- bytestring
-- lens
-- generic-lens
-- warp
 - blaze-markup
-- raw-strings-qq
-- interpolatedstring-perl6
-- streaming
-- stm
-- diagrams
-- diagrams-svg
+- bytestring
 - diagrams-core
 - diagrams-lib
+- diagrams-svg
+- interpolatedstring-perl6
+- lens
+- mtl
+- servant
+- servant-blaze
+- servant-server
+- servant-websockets
+- stm
+- streaming
 - svg-builder
-- colour
+- transformers
+- warp
+- websockets
 
 
 library:
@@ -63,13 +54,3 @@ executables:
     dependencies:
     - suavemente
 
-tests:
-  suavemente-test:
-    main:                Spec.hs
-    source-dirs:         test
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - suavemente

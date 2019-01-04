@@ -1,11 +1,10 @@
 {-# LANGUAGE ApplicativeDo #-}
-{-# OPTIONS_GHC -Wall      #-}
 
 module Main where
 
 import Diagrams.Backend.SVG
 import Diagrams.Prelude hiding (rad)
-import Lib
+import Web.Suavemente
 
 
 main :: IO ()
