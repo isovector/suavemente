@@ -16,10 +16,13 @@ main = suavemente $ do
   x   <- slider "X" 0 20 10
   y   <- slider "Y" 0 20 10
 
+  bool <- checkbox "Check" False
+  string <- textbox "String" "hello"
+
   pure (
     circle rad
             # fc (sRGB r g b)
             # translate (r2 (x, y))
             # rectEnvelope (p2 (0, 0)) (r2 (20, 20))
-    :: Diagram B)
+    :: Diagram B, bool, string)
 

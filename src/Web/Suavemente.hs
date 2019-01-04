@@ -1,6 +1,7 @@
 {-# LANGUAGE ApplicativeDo              #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE ExtendedDefaultRules       #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -44,20 +45,18 @@ module Web.Suavemente
 import           Control.Applicative (liftA2)
 import           Control.Arrow ((&&&))
 import           Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
-import           Control.Lens hiding ((#))
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.STM (STM, atomically)
 import           Control.Monad.State (StateT (..), evalStateT)
 import           Control.Monad.State.Class (MonadState (..), modify)
 import           Control.Monad.Trans.Class (lift)
-import           Data.Bifunctor (second)
+import           Data.Aeson (FromJSON (..), decode, fromJSON, Result (..), Value (), genericParseJSON, Options (..), defaultOptions, camelTo2)
 import           Data.Bool (bool)
 import qualified Data.ByteString.Char8 as B
-import           Data.Char (toUpper)
-import           Data.Data.Lens (upon)
 import           Data.Proxy (Proxy (..))
 import           Diagrams.Backend.SVG (B, SVG (..), Options (..))
 import qualified Diagrams.Prelude as D
+import           GHC.Generics (Generic)
 import           Graphics.Svg.Core (renderBS)
 import           Network.Wai.Handler.Warp (run)
 import           Network.WebSockets (Connection, receiveData, sendTextData)
@@ -96,8 +95,8 @@ data Input a = Input
     -- The 'IO ()' action is to publish a change notification to the downstream
     -- computations.
   , _iFold :: IO ()
-           -> S.Stream (S.Of (String, String)) IO ()
-           -> S.Stream (S.Of (String, String)) IO ()
+           -> S.Stream (S.Of ChangeEvent) IO ()
+           -> S.Stream (S.Of ChangeEvent) IO ()
 
     -- | The current value of the 'Input'.
   , _iValue :: STM a
@@ -125,7 +124,7 @@ suavemente w = do
 ------------------------------------------------------------------------------
 -- | Constructor for building 'Suave' inputs that are backed by HTML elements.
 mkInput
-    :: Read a
+    :: FromJSON a
     => (String -> a -> Markup)  -- ^ Function to construct the HTML element. The first parameter is what should be used for the element's 'id' attribute.
     -> a                        -- ^ The input's initial value.
     -> Suave a
@@ -136,20 +135,40 @@ mkInput f a = Suave $ do
 
 
 ------------------------------------------------------------------------------
+-- | EXPLODE IF PARSING FAILS
+fromResult :: Result a -> a
+fromResult (Success a) = a
+fromResult (Error s) = error s
+
+
+------------------------------------------------------------------------------
+-- | Change messages that come from the JS side.
+data ChangeEvent = ChangeEvent
+  { ceElement :: String
+  , cePayload :: Value
+  } deriving (Eq, Show, Generic)
+
+instance FromJSON ChangeEvent where
+  parseJSON = genericParseJSON $ defaultOptions
+    { fieldLabelModifier = camelTo2 '_' . drop 2
+    }
+
+
+------------------------------------------------------------------------------
 -- | Construct an '_iFold' field for 'Input's.
 getEvents
-    :: Read a
+    :: FromJSON a
     => TVar a  -- ^ The underlying 'TVar' to publish changes to.
     -> String  -- ^ The name of the HTML input.
     -> IO ()   -- ^ Publish a change notification.
-    -> S.Stream (S.Of (String, String)) IO ()
-    -> S.Stream (S.Of (String, String)) IO ()
+    -> S.Stream (S.Of ChangeEvent) IO ()
+    -> S.Stream (S.Of ChangeEvent) IO ()
 getEvents t n update
   = S.mapMaybeM (
-    \a@(i, z) ->
+    \a@(ChangeEvent i z) ->
        case i == n of
           True  -> do
-            liftIO . atomically . writeTVar t . read $ z & upon head %~ toUpper
+            liftIO . atomically . writeTVar t . fromResult $ fromJSON z
             update
             pure Nothing
           False -> pure $ Just a
@@ -166,7 +185,7 @@ showMarkup = renderMarkup . toMarkup
 ------------------------------------------------------------------------------
 -- | Create an input driven by an HTML slider.
 slider
-    :: (ToMarkup a, Num a, Read a)
+    :: (ToMarkup a, Num a, FromJSON a)
     => String  -- ^ label
     -> a       -- ^ min
     -> a       -- ^ max
@@ -185,7 +204,7 @@ slider label l u = mkInput $ \name v ->
 -- | Create an input driven by an HTML slider, whose domain is the real
 -- numbers.
 realSlider
-    :: (ToMarkup a, Num a, Real a, Read a)
+    :: (ToMarkup a, Num a, Real a, FromJSON a)
     => String  -- ^ label
     -> a       -- ^ min
     -> a       -- ^ max
@@ -209,7 +228,7 @@ checkbox label = mkInput $ \name v ->
     [qc|<tr><td>
         <label for="{name}">{label}</label>
         </td><td>
-        <input id="{name}" oninput="onChangeBoolFunc(event)" type="checkbox" {bool ("" :: String) "checked='checked'" v} autocomplete="off">
+        <input id="{name}" onchange="onChangeFunc(event)" type="checkbox" {bool ("" :: String) "checked='checked'" v} autocomplete="off">
         </td></tr>|]
 
 
@@ -224,14 +243,14 @@ textbox label = mkInput $ \name v ->
     [qc|<tr><td>
         <label for="{name}">{label}</label>
         </td><td>
-        <input id="{name}" oninput="onChangeStrFunc(event)" type="text" value="{v}" autocomplete="off">
+        <input id="{name}" oninput="onChangeFunc(event)" type="text" value="{v}" autocomplete="off">
         </td></tr>|]
 
 
 ------------------------------------------------------------------------------
 -- | Create an input driven by an HTML select.
 dropdown
-    :: (Read a, ToMarkup a)
+    :: (FromJSON a, ToMarkup a)
     => String  -- ^ label
     -> [(String, a)]
     -> a
@@ -252,7 +271,7 @@ dropdown label opts = mkInput $ \name _ -> preEscapedString $
 ------------------------------------------------------------------------------
 -- | Create an input for enums driven by an HTML select.
 enumDropdown
-    :: (Read a, ToMarkup a, Enum a, Bounded a)
+    :: (FromJSON a, ToMarkup a, Enum a, Bounded a)
     => String  -- ^ label
     -> a
     -> Suave a
@@ -268,14 +287,40 @@ htmlPage a = preEscapedString $
   <style>
   </style>|]
   ++
-  [qc|
+  [q|
   <script>
-     let ws = new WebSocket("ws://localhost:8080/suavemente");
-     ws.onmessage = (e) => document.getElementById("result").innerHTML = e.data;
-     let onChangeFunc = (e) => ws.send(e.target.id + " " + e.target.value)
-     let onChangeStrFunc = (e) => ws.send(e.target.id + " \"" + e.target.value + "\"")
-     let onChangeBoolFunc = (e) => ws.send(e.target.id + " " + e.target.checked)
+    // from https://code.lengstorf.com/get-form-values-as-json/
+    const isCheckbox = e => e.type === 'checkbox';
+    const isMultiSelect = e => e.options && e.multiple;
+    const getSelectValues = options => [].reduce.call(options, (values, option) => {
+      return option.selected ? values.concat(option.value) : values;
+    }, []);
+
+
+    let ws = new WebSocket("ws://localhost:8080/suavemente");
+    ws.onmessage = (e) => document.getElementById("result").innerHTML = e.data;
+
+    const onChangeFunc = e => {
+      let element = e.target;
+      let result = null;
+      if (isCheckbox(element)) {
+        result = element.checked;
+      } else if (isMultiSelect(element)) {
+        result = getSelectValues(element);
+      } else if (element.type === 'range') {
+        result = parseFloat(element.value);
+      } else {
+        result = element.value;
+      }
+
+      if (result !== null) {
+        ws.send(JSON.stringify({ "element": element.id, "payload": result }));
+      }
+    }
   </script>
+  |]
+  ++
+  [qc|
   <div id="result">{showMarkup a}</div>
   <table>
   |]
@@ -286,7 +331,7 @@ htmlPage a = preEscapedString $
 socketHandler
     :: ToMarkup a
     => STM a
-    -> (IO () -> S.Stream (S.Of (String, String)) IO () -> S.Stream (S.Of (String, String)) IO ())
+    -> (IO () -> S.Stream (S.Of ChangeEvent) IO () -> S.Stream (S.Of ChangeEvent) IO ())
     -> Connection
     -> Handler ()
 socketHandler v f c
@@ -294,9 +339,9 @@ socketHandler v f c
   . S.effects
   . f (sendTextData c . B.pack . showMarkup =<< atomically v)
   . S.mapM (liftA2 (>>) print pure)
-  . S.map (second (drop 1) . span (/= ' '))
+  . S.mapMaybe id
   . S.repeatM
-  . fmap B.unpack
+  . fmap decode
   $ receiveData c
 
 
@@ -322,4 +367,28 @@ instance ToMarkup (D.QDiagram B D.V2 Double D.Any) where
            . renderBS
            . D.renderDia SVG
                          (SVGOptions (D.mkWidth 250) Nothing "" [] True)
+
+instance (ToMarkup a, ToMarkup b) => ToMarkup (a, b) where
+  toMarkup (a, b) =
+    mconcat
+      [ toMarkup a
+      , toMarkup b
+      ]
+
+instance (ToMarkup a, ToMarkup b, ToMarkup c) => ToMarkup (a, b, c) where
+  toMarkup (a, b, c) =
+    mconcat
+      [ toMarkup a
+      , toMarkup b
+      , toMarkup c
+      ]
+
+instance (ToMarkup a, ToMarkup b, ToMarkup c, ToMarkup d) => ToMarkup (a, b, c, d) where
+  toMarkup (a, b, c, d) =
+    mconcat
+      [ toMarkup a
+      , toMarkup b
+      , toMarkup c
+      , toMarkup d
+      ]
 

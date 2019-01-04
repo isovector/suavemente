@@ -7,3 +7,4 @@ First release!
 ## Unreleased changes
 
 - New inputs: `dropdown` and `enumDropdown`
+- Add a proper JSON message stream
