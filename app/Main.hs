@@ -1,12 +1,14 @@
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE QuasiQuotes                #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
 {-# LANGUAGE ViewPatterns               #-}
 
 module Main where
@@ -33,8 +35,12 @@ import           Servant.HTML.Blaze
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
 import           Text.Blaze (preEscapedString, Markup)
+import           Text.Blaze.Renderer.String
 import           Text.InterpolatedString.Perl6
 
+
+instance Show Markup where
+  show = renderMarkup
 
 data Input a = Input
   { iHtml :: Markup
@@ -44,6 +50,17 @@ data Input a = Input
   , iValue :: STM a
   } deriving Functor
 
+
+data Color = Color Int Int Int
+  deriving (Eq, Ord, Show)
+
+
+showColor :: Color -> Markup
+showColor (Color r g b) = preEscapedString
+  [qc|
+    <div style="width: 200px; height: 200px; background-color: rgb({show r}, {show g}, {show b});">
+      </div>
+    |]
 
 
 instance Applicative Input where
@@ -91,22 +108,26 @@ mkInput f a = Suave $ do
 slider :: (Show a, Num a, Read a) => a -> a -> a -> Suave a
 slider l u = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" onchange="onChangeFunc(event)" type="range" min="{l}" max="{u}" value="{v}"><br/>|]
+    [qc|<input id="{name}" oninput="onChangeFunc(event)" type="range" min="{l}" max="{u}" value="{v}"><br/>|]
 
 
 checkbox :: Bool -> Suave Bool
 checkbox = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" onchange="onChangeBoolFunc(event)" type="checkbox" {bool "" "checked='checked'" v}><br/>|]
+    [qc|<input id="{name}" oninput="onChangeBoolFunc(event)" type="checkbox" {bool "" "checked='checked'" v}><br/>|]
 
 textbox :: String -> Suave String
 textbox = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" onchange="onChangeStrFunc(event)" type="text" value="{v}"><br/>|]
+    [qc|<input id="{name}" oninput="onChangeStrFunc(event)" type="text" value="{v}"><br/>|]
 
 
 main :: IO ()
-main = suavemente $ (,,) <$> (slider @Int 0 10 5) <*> (checkbox True) <*> textbox "sandy"
+main = suavemente
+     . fmap showColor
+     $ Color <$> slider 0 255 255
+             <*> slider 0 255 255
+             <*> slider 0 255 255
 
 suavemente :: Show a => Suave a -> IO ()
 suavemente w = do
@@ -157,31 +178,6 @@ genName = do
 
 makeId :: String -> String
 makeId i = "id=\"" ++ i ++ "\""
-
-
--- toHtml :: Widget a -> State Int (M.Map String String)
--- toHtml (Slider l u c k) = do
---   name <- genName
---   pure $ M.singleton name
---     [qc|<input id="{name}" onchange="onChangeFunc(event)" type="range" min="{show l}">|]
--- toHtml (Checkbox b k)   = do
---   name <- genName
---   pure $ M.singleton name
---     [qc|<input id="{name}" type="checkbox" >|]
--- toHtml (Textbox s k)    = do
---   name <- genName
---   pure $ M.singleton name
---     [qc|<input id="{name}" type="text" >|]
--- toHtml (Dropdown os k)  = do
---   name <- genName
---   pure $ M.singleton name
---     [qc|<select id="{name}"></select>|]
--- toHtml (Pure a)         = do
---   name <- genName
---   pure $ M.singleton name
---     [qc|<div id={name}></div>|]
--- toHtml (Apply f a)      = do
---   liftA2 mappend (toHtml f) (toHtml a)
 
 
 type API = Get '[HTML] Markup
