@@ -13,6 +13,7 @@ module Main where
 
 import           Control.Applicative
 import           Control.Concurrent.STM.TVar
+import           Control.Lens
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
 import           Control.Monad.State (StateT (..), evalStateT)
@@ -21,6 +22,8 @@ import           Control.Monad.Trans.Class
 import           Data.Bifunctor
 import           Data.Bool
 import qualified Data.ByteString.Char8 as B
+import           Data.Char
+import           Data.Data.Lens
 import           Data.Proxy
 import           Network.Wai.Handler.Warp
 import           Network.WebSockets
@@ -71,7 +74,7 @@ getEvents t n update
     \a@(i, z) ->
        case i == n of
           True  -> do
-            liftIO $ atomically $ writeTVar t $ read z
+            liftIO . atomically . writeTVar t . read $ z & upon head %~ toUpper
             update
             pure Nothing
           False -> pure $ Just a
@@ -94,16 +97,16 @@ slider l u = mkInput $ \name v ->
 checkbox :: Bool -> Suave Bool
 checkbox = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" onchange="onChangeFunc(event)" type="checkbox" {bool "" "checked='checked'" v}><br/>|]
+    [qc|<input id="{name}" onchange="onChangeBoolFunc(event)" type="checkbox" {bool "" "checked='checked'" v}><br/>|]
 
 textbox :: String -> Suave String
 textbox = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" onchange="onChangeFunc(event)" type="text" value="{v}"><br/>|]
+    [qc|<input id="{name}" onchange="onChangeStrFunc(event)" type="text" value="{v}"><br/>|]
 
 
 main :: IO ()
-main = suavemente $ (,,) <$> (slider @Int 0 10 5) <*> (slider 0 10 5) <*> textbox "sandy"
+main = suavemente $ (,,) <$> (slider @Int 0 10 5) <*> (checkbox True) <*> textbox "sandy"
 
 suavemente :: Show a => Suave a -> IO ()
 suavemente w = do
@@ -138,6 +141,8 @@ htmlPage a = preEscapedString
      let ws = new WebSocket("ws://localhost:8080/suavemente");
      ws.onmessage = (e) => document.getElementById("result").innerHTML = e.data;
      let onChangeFunc = (e) => ws.send(e.target.id + " " + e.target.value)
+     let onChangeStrFunc = (e) => ws.send(e.target.id + " \"" + e.target.value + "\"")
+     let onChangeBoolFunc = (e) => ws.send(e.target.id + " " + e.target.checked)
   </script>
   <div id="result">{show a}</div>
   |]
