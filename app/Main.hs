@@ -1,9 +1,11 @@
+{-# LANGUAGE ApplicativeDo              #-}
 {-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE QuasiQuotes                #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
@@ -15,7 +17,7 @@ module Main where
 
 import           Control.Applicative
 import           Control.Concurrent.STM.TVar
-import           Control.Lens
+import           Control.Lens hiding ((#))
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
 import           Control.Monad.State (StateT (..), evalStateT)
@@ -25,8 +27,14 @@ import           Data.Bifunctor
 import           Data.Bool
 import qualified Data.ByteString.Char8 as B
 import           Data.Char
+import           Data.Coerce
+import qualified Data.Colour as D
 import           Data.Data.Lens
 import           Data.Proxy
+import           Diagrams.Backend.SVG
+import           Diagrams.Prelude ((#))
+import qualified Diagrams.Prelude as D
+import           Graphics.Svg.Core (renderBS)
 import           Network.Wai.Handler.Warp
 import           Network.WebSockets
 import           Servant
@@ -34,13 +42,20 @@ import           Servant.API.WebSocket
 import           Servant.HTML.Blaze
 import qualified Streaming as S
 import qualified Streaming.Prelude as S
-import           Text.Blaze (preEscapedString, Markup)
+import           Text.Blaze (preEscapedString, Markup, ToMarkup (..), unsafeLazyByteString )
 import           Text.Blaze.Renderer.String
 import           Text.InterpolatedString.Perl6
 
 
-instance Show Markup where
-  show = renderMarkup
+instance ToMarkup (D.QDiagram B D.V2 Double D.Any) where
+  toMarkup = unsafeLazyByteString
+           . renderBS
+           . D.renderDia SVG
+                         (SVGOptions (D.mkWidth 250) Nothing "" [] True)
+
+
+showMarkup :: ToMarkup a => a -> String
+showMarkup = renderMarkup . toMarkup
 
 data Input a = Input
   { iHtml :: Markup
@@ -105,10 +120,15 @@ mkInput f a = Suave $ do
   pure $ Input (f name a) (getEvents tvar name) (readTVar tvar)
 
 
-slider :: (Show a, Num a, Read a) => a -> a -> a -> Suave a
+slider :: (ToMarkup a, Num a, Read a) => a -> a -> a -> Suave a
 slider l u = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" oninput="onChangeFunc(event)" type="range" min="{l}" max="{u}" value="{v}"><br/>|]
+    [qc|<input id="{name}" oninput="onChangeFunc(event)" type="range" min="{showMarkup l}" max="{showMarkup u}" value="{showMarkup v}"><br/>|]
+
+realSlider :: (ToMarkup a, Num a, Real a, Read a) => a -> a -> a -> a -> Suave a
+realSlider l u s = mkInput $ \name v ->
+  preEscapedString
+    [qc|<input id="{name}" oninput="onChangeFunc(event)" type="range" min="{showMarkup l}" max="{showMarkup u}" step="{showMarkup s}" value="{showMarkup v}"><br/>|]
 
 
 checkbox :: Bool -> Suave Bool
@@ -123,13 +143,16 @@ textbox = mkInput $ \name v ->
 
 
 main :: IO ()
-main = suavemente
-     . fmap showColor
-     $ Color <$> slider 0 255 255
-             <*> slider 0 255 255
-             <*> slider 0 255 255
+main = suavemente $ do
+  rad <- slider 1 10 5
+  r <- realSlider 0 1 0.05 1
+  g <- realSlider 0 1 0.05 1
+  b <- realSlider 0 1 0.05 1
+  x <- slider 0 255 255
+  y <- slider 0 255 255
+  pure (D.circle rad # D.fc (D.sRGB r g b) # D.translate (D.r2 (x, y)) :: D.Diagram B)
 
-suavemente :: Show a => Suave a -> IO ()
+suavemente :: ToMarkup a => Suave a -> IO ()
 suavemente w = do
   (Input html f a)  <- atomically $ evalStateT (suavely w) 0
   a0 <- atomically a
@@ -139,7 +162,7 @@ suavemente w = do
 
 
 socketHandler
-    :: Show a
+    :: ToMarkup a
     => STM a
     -> (IO () -> S.Stream (S.Of (String, String)) IO () -> S.Stream (S.Of (String, String)) IO ())
     -> Connection
@@ -147,7 +170,7 @@ socketHandler
 socketHandler v f c
   = liftIO
   . S.effects
-  . f (sendTextData c . B.pack . show =<< atomically v)
+  . f (sendTextData c . B.pack . showMarkup =<< atomically v)
   . S.mapM (liftA2 (>>) print pure)
   . S.map (second tail . span (/= ' '))
   . S.repeatM
@@ -155,7 +178,7 @@ socketHandler v f c
   $ receiveData c
 
 
-htmlPage :: Show a => a -> Markup
+htmlPage :: ToMarkup a => a -> Markup
 htmlPage a = preEscapedString
   [qc|
   <script>
@@ -165,7 +188,7 @@ htmlPage a = preEscapedString
      let onChangeStrFunc = (e) => ws.send(e.target.id + " \"" + e.target.value + "\"")
      let onChangeBoolFunc = (e) => ws.send(e.target.id + " " + e.target.checked)
   </script>
-  <div id="result">{show a}</div>
+  <div id="result">{showMarkup a}</div>
   |]
 
 

@@ -41,6 +41,12 @@ dependencies:
 - interpolatedstring-perl6
 - streaming
 - stm
+- diagrams
+- diagrams-svg
+- diagrams-core
+- diagrams-lib
+- svg-builder
+- colour
 
 
 library:
