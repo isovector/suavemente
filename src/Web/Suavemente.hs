@@ -114,11 +114,11 @@ instance Applicative Input where
 -- | Run a 'Suave' computation by spinning up its webpage at @localhost:8080@.
 suavemente :: ToMarkup a => Suave a -> IO ()
 suavemente w = do
-  Input html f a  <- atomically $ evalStateT (suavely w) 0
+  Input html _ a <- atomically $ evalStateT (suavely w) 0
   a0 <- atomically a
   run 8080
     . serve (Proxy @API)
-    $ pure (htmlPage a0 <> html) :<|> socketHandler a f
+    $ pure (htmlPage a0 <> html) :<|> socketHandler w
 
 
 ------------------------------------------------------------------------------
@@ -330,19 +330,18 @@ htmlPage a = preEscapedString $
 -- | 'Handler' endpoint for responding to 'Suave''s websockets.
 socketHandler
     :: ToMarkup a
-    => STM a
-    -> (IO () -> S.Stream (S.Of ChangeEvent) IO () -> S.Stream (S.Of ChangeEvent) IO ())
+    => Suave a
     -> Connection
     -> Handler ()
-socketHandler v f c
-  = liftIO
-  . S.effects
-  . f (sendTextData c . B.pack . showMarkup =<< atomically v)
-  . S.mapM (liftA2 (>>) print pure)
-  . S.mapMaybe id
-  . S.repeatM
-  . fmap decode
-  $ receiveData c
+socketHandler w c = liftIO $ do
+  Input _ f a <- atomically $ evalStateT (suavely w) 0
+  S.effects
+    . f (sendTextData c . B.pack . showMarkup =<< atomically a)
+    . S.mapM (liftA2 (>>) print pure)
+    . S.mapMaybe id
+    . S.repeatM
+    . fmap decode
+    $ receiveData c
 
 
 ------------------------------------------------------------------------------
