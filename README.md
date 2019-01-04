@@ -1,5 +1,9 @@
 # suavemente
 
+[![Build Status](https://travis-ci.org/isovector/suavemente.svg?branch=master)](https://travis-ci.org/isovector/suavemente) | [Hackage][hackage]
+
+[hackage]: https://hackage.haskell.org/package/suavemente
+
 ## Dedication
 
 > Today's kitchen is all about a well-planned space that makes cooking a
