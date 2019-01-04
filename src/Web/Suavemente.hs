@@ -9,6 +9,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE QuasiQuotes                #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeOperators              #-}
@@ -20,8 +21,10 @@
 module Web.Suavemente
   ( -- * Primary Stuff
     Suave ()
+  , SomeSuave (..)
   , Input ()
   , suavemente
+  , suavementely
 
     -- * Inputs
   , textbox
@@ -45,6 +48,7 @@ module Web.Suavemente
 import           Control.Applicative (liftA2)
 import           Control.Arrow ((&&&))
 import           Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
+import           Control.Monad.Except (throwError)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.STM (STM, atomically)
 import           Control.Monad.State (StateT (..), evalStateT)
@@ -53,6 +57,7 @@ import           Control.Monad.Trans.Class (lift)
 import           Data.Aeson (FromJSON (..), decode, fromJSON, Result (..), Value (), genericParseJSON, Options (..), defaultOptions, camelTo2)
 import           Data.Bool (bool)
 import qualified Data.ByteString.Char8 as B
+import qualified Data.Map.Strict as M
 import           Data.Proxy (Proxy (..))
 import           Diagrams.Backend.SVG (B, SVG (..), Options (..))
 import qualified Diagrams.Prelude as D
@@ -60,7 +65,7 @@ import           GHC.Generics (Generic)
 import           Graphics.Svg.Core (renderBS)
 import           Network.Wai.Handler.Warp (run)
 import           Network.WebSockets (Connection, receiveData, sendTextData)
-import           Servant (Get, Handler, (:<|>)(..), (:>), serve)
+import           Servant (Get, Handler, Capture, (:<|>)(..), (:>), serve, err404)
 import           Servant.API.WebSocket (WebSocket)
 import           Servant.HTML.Blaze (HTML)
 import qualified Streaming as S
@@ -79,6 +84,10 @@ newtype Suave a = Suave
 instance Applicative Suave where
   pure = Suave . pure . pure
   Suave f <*> Suave a = Suave $ liftA2 (<*>) f a
+
+
+data SomeSuave where
+  SomeSuave :: ToMarkup a => Suave a -> SomeSuave
 
 
 ------------------------------------------------------------------------------
@@ -114,12 +123,29 @@ instance Applicative Input where
 -- | Run a 'Suave' computation by spinning up its webpage at @localhost:8080@.
 suavemente :: ToMarkup a => Suave a -> IO ()
 suavemente w = do
-  Input html _ a <- atomically $ evalStateT (suavely w) 0
-  a0 <- atomically a
+  let ws = M.singleton "" $ SomeSuave w
   run 8080
     . serve (Proxy @API)
-    $ pure (htmlPage a0 <> html) :<|> socketHandler w
+    $ htmlHandler ws "" :<|> socketHandler ws ""
 
+
+------------------------------------------------------------------------------
+-- | Run a 'Suave' computation by spinning up its webpage at @localhost:8080@.
+suavementely :: M.Map String SomeSuave -> IO ()
+suavementely w = do
+  run 8080
+    . serve (Proxy @API2)
+    $ htmlHandler w :<|> socketHandler w
+
+
+htmlHandler :: M.Map String SomeSuave -> String -> Handler Markup
+htmlHandler ws res =
+  case M.lookup res ws of
+    Nothing -> throwError err404
+    Just (SomeSuave w) -> liftIO $ do
+      Input html _ a <- atomically $ evalStateT (suavely w) 0
+      a0 <- atomically a
+      pure $ htmlPage res a0 <> html
 
 ------------------------------------------------------------------------------
 -- | Constructor for building 'Suave' inputs that are backed by HTML elements.
@@ -281,8 +307,8 @@ enumDropdown label =
 
 ------------------------------------------------------------------------------
 -- | HTML code to inject into all 'Suave' pages.
-htmlPage :: ToMarkup a => a -> Markup
-htmlPage a = preEscapedString $
+htmlPage :: ToMarkup a => String -> a -> Markup
+htmlPage res a = preEscapedString $
   [q|
   <style>
   </style>|]
@@ -297,8 +323,15 @@ htmlPage a = preEscapedString $
     }, []);
 
 
-    let ws = new WebSocket("ws://localhost:8080/suavemente");
-    ws.onmessage = (e) => document.getElementById("result").innerHTML = e.data;
+    let ws = new WebSocket("ws://localhost:8080/|] ++ res ++ [q|/ws");
+
+    const keepAlive = () => {
+      ws.send(JSON.stringify({}));
+      setTimeout(keepAlive, 1000);
+    };
+
+    ws.onopen = e => keepAlive();
+    ws.onmessage = e => document.getElementById("result").innerHTML = e.data;
 
     const onChangeFunc = e => {
       let element = e.target;
@@ -329,19 +362,22 @@ htmlPage a = preEscapedString $
 ------------------------------------------------------------------------------
 -- | 'Handler' endpoint for responding to 'Suave''s websockets.
 socketHandler
-    :: ToMarkup a
-    => Suave a
+    :: M.Map String SomeSuave
+    -> String
     -> Connection
     -> Handler ()
-socketHandler w c = liftIO $ do
-  Input _ f a <- atomically $ evalStateT (suavely w) 0
-  S.effects
-    . f (sendTextData c . B.pack . showMarkup =<< atomically a)
-    . S.mapM (liftA2 (>>) print pure)
-    . S.mapMaybe id
-    . S.repeatM
-    . fmap decode
-    $ receiveData c
+socketHandler ws s c =
+  case M.lookup s ws of
+    Nothing -> throwError err404
+    Just (SomeSuave w) -> liftIO $ do
+      Input _ f a <- atomically $ evalStateT (suavely w) 0
+      S.effects
+        . f (sendTextData c . B.pack . showMarkup =<< atomically a)
+        . S.mapM (liftA2 (>>) print pure)
+        . S.mapMaybe id
+        . S.repeatM
+        . fmap decode
+        $ receiveData c
 
 
 ------------------------------------------------------------------------------
@@ -357,6 +393,12 @@ genName = do
 -- | The API for 'Suave' pages.
 type API = Get '[HTML] Markup
       :<|> "suavemente" :> WebSocket
+
+
+------------------------------------------------------------------------------
+-- | The API for 'Suavely' pages.
+type API2 = Capture "resource" String :> Get '[HTML] Markup
+       :<|> Capture "resource" String :> "ws" :> WebSocket
 
 
 ------------------------------------------------------------------------------

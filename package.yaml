@@ -23,6 +23,7 @@ dependencies:
 - aeson
 - blaze-markup
 - bytestring
+- containers
 - diagrams-core
 - diagrams-lib
 - diagrams-svg
