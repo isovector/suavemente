@@ -121,36 +121,66 @@ mkInput f a = Suave $ do
   pure $ Input (f name a) (getEvents tvar name) (readTVar tvar)
 
 
-slider :: (ToMarkup a, Num a, Read a) => a -> a -> a -> Suave a
-slider l u = mkInput $ \name v ->
+slider
+    :: (ToMarkup a, Num a, Read a)
+    => String  -- ^ label
+    -> a       -- ^ min
+    -> a       -- ^ max
+    -> a       -- ^ value
+    -> Suave a
+slider label l u = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" oninput="onChangeFunc(event)" type="range" min="{showMarkup l}" max="{showMarkup u}" value="{showMarkup v}"><br/>|]
+    [qc|<tr><td>
+        <label for="{name}">{label}</label>
+        </td><td>
+        <input id="{name}" oninput="onChangeFunc(event)" type="range" min="{showMarkup l}" max="{showMarkup u}" value="{showMarkup v}" autocomplete="off">
+        </td></tr>|]
 
-realSlider :: (ToMarkup a, Num a, Real a, Read a) => a -> a -> a -> a -> Suave a
-realSlider l u s = mkInput $ \name v ->
+realSlider
+    :: (ToMarkup a, Num a, Real a, Read a)
+    => String  -- ^ label
+    -> a       -- ^ min
+    -> a       -- ^ max
+    -> a       -- ^ step
+    -> a       -- ^ value
+    -> Suave a
+realSlider label l u s = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" oninput="onChangeFunc(event)" type="range" min="{showMarkup l}" max="{showMarkup u}" step="{showMarkup s}" value="{showMarkup v}"><br/>|]
+    [qc|<tr><td>
+        <label for="{name}">{label}</label>
+        </td><td>
+        <input id="{name}" oninput="onChangeFunc(event)" type="range" min="{showMarkup l}" max="{showMarkup u}" step="{showMarkup s}" value="{showMarkup v}" autocomplete="off">
+        </td></tr>|]
 
 
-checkbox :: Bool -> Suave Bool
-checkbox = mkInput $ \name v ->
+
+checkbox :: String -> Bool -> Suave Bool
+checkbox label = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" oninput="onChangeBoolFunc(event)" type="checkbox" {bool ("" :: String) "checked='checked'" v}><br/>|]
+    [qc|<tr><td>
+        <label for="{name}">{label}</label>
+        </td><td>
+        <input id="{name}" oninput="onChangeBoolFunc(event)" type="checkbox" {bool ("" :: String) "checked='checked'" v} autocomplete="off">
+        </td></tr>|]
 
-textbox :: String -> Suave String
-textbox = mkInput $ \name v ->
+textbox :: String -> String -> Suave String
+textbox label = mkInput $ \name v ->
   preEscapedString
-    [qc|<input id="{name}" oninput="onChangeStrFunc(event)" type="text" value="{v}"><br/>|]
+    [qc|<tr><td>
+        <label for="{name}">{label}</label>
+        </td><td>
+        <input id="{name}" oninput="onChangeStrFunc(event)" type="text" value="{v}" autocomplete="off">
+        </td></tr>|]
 
 
 main :: IO ()
 main = suavemente $ do
-  rad <- slider 1 10 5
-  r <- realSlider 0 1 0.05 1
-  g <- realSlider 0 1 0.05 1
-  b <- realSlider 0 1 0.05 1
-  x <- slider 0 20 10
-  y <- slider 0 20 10
+  rad <- slider "Radius" 1 10 5
+  r <- realSlider "Red" 0 1 0.05 1
+  g <- realSlider "Green" 0 1 0.05 1
+  b <- realSlider "Blue" 0 1 0.05 1
+  x <- slider "X" 0 20 10
+  y <- slider "Y" 0 20 10
   pure (
     D.circle rad
             # D.fc (D.sRGB r g b)
@@ -185,7 +215,11 @@ socketHandler v f c
 
 
 htmlPage :: ToMarkup a => a -> Markup
-htmlPage a = preEscapedString
+htmlPage a = preEscapedString $
+  [q|
+  <style>
+  </style>|]
+  ++
   [qc|
   <script>
      let ws = new WebSocket("ws://localhost:8080/suavemente");
@@ -195,6 +229,7 @@ htmlPage a = preEscapedString
      let onChangeBoolFunc = (e) => ws.send(e.target.id + " " + e.target.checked)
   </script>
   <div id="result">{showMarkup a}</div>
+  <table>
   |]
 
 
