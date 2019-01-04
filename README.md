@@ -50,12 +50,3 @@ main = suavemente $ do
     :: Diagram B)
 ```
 
-
-## To Do
-
-The "protocol" is disgusting---it just tries to `read` the incoming websocket
-data. A better approach would be to hook it up via `FromJSON`, but it's
-nontrivial to get JSON out of a web form and I cbf.
-
-Pull requests are welcome!
-
