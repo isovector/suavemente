@@ -1,249 +1,26 @@
-{-# LANGUAGE ApplicativeDo              #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE ExtendedDefaultRules       #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GADTs                      #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE QuasiQuotes                #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE TypeApplications           #-}
-{-# LANGUAGE TypeOperators              #-}
-{-# LANGUAGE TypeSynonymInstances       #-}
-{-# LANGUAGE ViewPatterns               #-}
-
-{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
+{-# LANGUAGE ApplicativeDo #-}
+{-# OPTIONS_GHC -Wall      #-}
 
 module Main where
 
-import           Control.Applicative
-import           Control.Concurrent.STM.TVar
-import           Control.Lens hiding ((#))
-import           Control.Monad.IO.Class
-import           Control.Monad.STM
-import           Control.Monad.State (StateT (..), evalStateT)
-import           Control.Monad.State.Class
-import           Control.Monad.Trans.Class
-import           Data.Bifunctor
-import           Data.Bool
-import qualified Data.ByteString.Char8 as B
-import           Data.Char
-import           Data.Data.Lens
-import           Data.Proxy
-import           Diagrams.Backend.SVG
-import           Diagrams.Prelude ((#))
-import qualified Diagrams.Prelude as D
-import           Graphics.Svg.Core (renderBS)
-import           Network.Wai.Handler.Warp
-import           Network.WebSockets
-import           Servant
-import           Servant.API.WebSocket
-import           Servant.HTML.Blaze
-import qualified Streaming as S
-import qualified Streaming.Prelude as S
-import           Text.Blaze (preEscapedString, Markup, ToMarkup (..), unsafeLazyByteString )
-import           Text.Blaze.Renderer.String
-import           Text.InterpolatedString.Perl6
-
-
-instance ToMarkup (D.QDiagram B D.V2 Double D.Any) where
-  toMarkup = unsafeLazyByteString
-           . renderBS
-           . D.renderDia SVG
-                         (SVGOptions (D.mkWidth 250) Nothing "" [] True)
-
-
-showMarkup :: ToMarkup a => a -> String
-showMarkup = renderMarkup . toMarkup
-
-data Input a = Input
-  { iHtml :: Markup
-  , iFold :: IO ()
-          -> S.Stream (S.Of (String, String)) IO ()
-          -> S.Stream (S.Of (String, String)) IO ()
-  , iValue :: STM a
-  } deriving Functor
-
-
-data Color = Color Int Int Int
-  deriving (Eq, Ord, Show)
-
-
-showColor :: Color -> Markup
-showColor (Color r g b) = preEscapedString
-  [qc|
-    <div style="width: 200px; height: 200px; background-color: rgb({show r}, {show g}, {show b});">
-      </div>
-    |]
-
-
-instance Applicative Input where
-  pure = Input mempty (const . const $ pure ()) . pure
-  Input fh ff fv <*> Input ah af av =
-    Input (fh <> ah)
-          (liftA2 (.) ff af)
-          (fv <*> av)
-
-newtype Suave a = Suave
-  { suavely :: StateT Int STM (Input a)
-  } deriving Functor
-
-instance Applicative Suave where
-  pure = Suave . pure . pure
-  Suave f <*> Suave a = Suave $ liftA2 (<*>) f a
-
-
-getEvents
-    :: Read a
-    => TVar a
-    -> String
-    -> IO ()
-    -> S.Stream (S.Of (String, String)) IO ()
-    -> S.Stream (S.Of (String, String)) IO ()
-getEvents t n update
-  = S.mapMaybeM (
-    \a@(i, z) ->
-       case i == n of
-          True  -> do
-            liftIO . atomically . writeTVar t . read $ z & upon head %~ toUpper
-            update
-            pure Nothing
-          False -> pure $ Just a
-           )
-
-
-mkInput :: Read a => (String -> a -> Markup) -> a -> Suave a
-mkInput f a = Suave $ do
-  name <- genName
-  tvar <- lift $ newTVar a
-  pure $ Input (f name a) (getEvents tvar name) (readTVar tvar)
-
-
-slider
-    :: (ToMarkup a, Num a, Read a)
-    => String  -- ^ label
-    -> a       -- ^ min
-    -> a       -- ^ max
-    -> a       -- ^ value
-    -> Suave a
-slider label l u = mkInput $ \name v ->
-  preEscapedString
-    [qc|<tr><td>
-        <label for="{name}">{label}</label>
-        </td><td>
-        <input id="{name}" oninput="onChangeFunc(event)" type="range" min="{showMarkup l}" max="{showMarkup u}" value="{showMarkup v}" autocomplete="off">
-        </td></tr>|]
-
-realSlider
-    :: (ToMarkup a, Num a, Real a, Read a)
-    => String  -- ^ label
-    -> a       -- ^ min
-    -> a       -- ^ max
-    -> a       -- ^ step
-    -> a       -- ^ value
-    -> Suave a
-realSlider label l u s = mkInput $ \name v ->
-  preEscapedString
-    [qc|<tr><td>
-        <label for="{name}">{label}</label>
-        </td><td>
-        <input id="{name}" oninput="onChangeFunc(event)" type="range" min="{showMarkup l}" max="{showMarkup u}" step="{showMarkup s}" value="{showMarkup v}" autocomplete="off">
-        </td></tr>|]
-
-
-
-checkbox :: String -> Bool -> Suave Bool
-checkbox label = mkInput $ \name v ->
-  preEscapedString
-    [qc|<tr><td>
-        <label for="{name}">{label}</label>
-        </td><td>
-        <input id="{name}" oninput="onChangeBoolFunc(event)" type="checkbox" {bool ("" :: String) "checked='checked'" v} autocomplete="off">
-        </td></tr>|]
-
-textbox :: String -> String -> Suave String
-textbox label = mkInput $ \name v ->
-  preEscapedString
-    [qc|<tr><td>
-        <label for="{name}">{label}</label>
-        </td><td>
-        <input id="{name}" oninput="onChangeStrFunc(event)" type="text" value="{v}" autocomplete="off">
-        </td></tr>|]
+import Diagrams.Backend.SVG
+import Diagrams.Prelude hiding (rad)
+import Lib
 
 
 main :: IO ()
 main = suavemente $ do
   rad <- slider "Radius" 1 10 5
-  r <- realSlider "Red" 0 1 0.05 1
-  g <- realSlider "Green" 0 1 0.05 1
-  b <- realSlider "Blue" 0 1 0.05 1
-  x <- slider "X" 0 20 10
-  y <- slider "Y" 0 20 10
+  r   <- realSlider "Red" 0 1 0.05 1
+  g   <- realSlider "Green" 0 1 0.05 1
+  b   <- realSlider "Blue" 0 1 0.05 1
+  x   <- slider "X" 0 20 10
+  y   <- slider "Y" 0 20 10
+
   pure (
-    D.circle rad
-            # D.fc (D.sRGB r g b)
-            # D.translate (D.r2 (x, y))
-            # D.rectEnvelope (D.p2 (0, 0)) (D.r2 (20, 20))
-    :: D.Diagram B)
-
-suavemente :: ToMarkup a => Suave a -> IO ()
-suavemente w = do
-  (Input html f a)  <- atomically $ evalStateT (suavely w) 0
-  a0 <- atomically a
-  run 8080
-    . serve (Proxy @API)
-    $ pure (htmlPage a0 <> html) :<|> socketHandler a f
-
-
-socketHandler
-    :: ToMarkup a
-    => STM a
-    -> (IO () -> S.Stream (S.Of (String, String)) IO () -> S.Stream (S.Of (String, String)) IO ())
-    -> Connection
-    -> Handler ()
-socketHandler v f c
-  = liftIO
-  . S.effects
-  . f (sendTextData c . B.pack . showMarkup =<< atomically v)
-  . S.mapM (liftA2 (>>) print pure)
-  . S.map (second (drop 1) . span (/= ' '))
-  . S.repeatM
-  . fmap B.unpack
-  $ receiveData c
-
-
-htmlPage :: ToMarkup a => a -> Markup
-htmlPage a = preEscapedString $
-  [q|
-  <style>
-  </style>|]
-  ++
-  [qc|
-  <script>
-     let ws = new WebSocket("ws://localhost:8080/suavemente");
-     ws.onmessage = (e) => document.getElementById("result").innerHTML = e.data;
-     let onChangeFunc = (e) => ws.send(e.target.id + " " + e.target.value)
-     let onChangeStrFunc = (e) => ws.send(e.target.id + " \"" + e.target.value + "\"")
-     let onChangeBoolFunc = (e) => ws.send(e.target.id + " " + e.target.checked)
-  </script>
-  <div id="result">{showMarkup a}</div>
-  <table>
-  |]
-
-
-genName :: MonadState Int m => m String
-genName = do
-  s <- get
-  modify (+1)
-  pure $ show s
-
-
-makeId :: String -> String
-makeId i = "id=\"" ++ i ++ "\""
-
-
-type API = Get '[HTML] Markup
-      :<|> "suavemente" :> WebSocket
+    circle rad
+            # fc (sRGB r g b)
+            # translate (r2 (x, y))
+            # rectEnvelope (p2 (0, 0)) (r2 (20, 20))
+    :: Diagram B)
 
