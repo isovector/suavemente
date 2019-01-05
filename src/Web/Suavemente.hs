@@ -284,7 +284,7 @@ dropdown
 dropdown label opts = mkInput $ \name _ -> preEscapedString $
   mconcat $
     [ [qc|<tr><td><label for="{name}">{label}</label></td><td>|]
-    , [qc|<select name="{name}" onchange="onChangeFunc(event)">|]
+    , [qc|<select id="{name}" onchange="onChangeFunc(event)" autocomplete="off">|]
     ] ++
     fmap (\(oname, oval) -> [qc|<option value="{showMarkup oval}">{oname}</option>|])
          opts
