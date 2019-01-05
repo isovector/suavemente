@@ -9,6 +9,7 @@ import Data.Bool
 import Diagrams.Backend.SVG
 import Diagrams.Prelude hiding (rad)
 import Web.Suavemente
+import Web.Suavemente.Orphans
 
 
 main :: IO ()
