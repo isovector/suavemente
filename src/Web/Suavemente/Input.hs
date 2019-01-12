@@ -7,7 +7,8 @@ import           Control.Arrow ((&&&))
 import           Control.Concurrent.STM.TVar (newTVar, readTVar)
 import           Control.Monad.State.Class (MonadState (..), modify)
 import           Control.Monad.Trans.Class (lift)
-import           Data.Aeson (FromJSON (..))
+import           Data.Aeson (FromJSON (..), Value)
+import           Data.Aeson.Types (Parser)
 import           Data.Bool (bool)
 import           Text.Blaze (preEscapedString, Markup, ToMarkup (..))
 import           Text.InterpolatedString.Perl6 (qc, q)
@@ -27,14 +28,14 @@ genName = do
 ------------------------------------------------------------------------------
 -- | Constructor for building 'Suave' inputs that are backed by HTML elements.
 mkInput
-    :: FromJSON a
-    => (String -> a -> Markup)  -- ^ Function to construct the HTML element. The first parameter is what should be used for the element's 'id' attribute.
+    :: (Value -> Parser a)
+    -> (String -> a -> Markup)  -- ^ Function to construct the HTML element. The first parameter is what should be used for the element's 'id' attribute.
     -> a                        -- ^ The input's initial value.
     -> Suave a
-mkInput f a = Suave $ do
+mkInput p f a = Suave $ do
   name <- genName
   tvar <- lift $ newTVar a
-  pure $ Input (f name a) (getEvents tvar name) (readTVar tvar)
+  pure $ Input (f name a) (getEvents p tvar name) (readTVar tvar)
 
 
 ------------------------------------------------------------------------------
@@ -46,7 +47,7 @@ slider
     -> a       -- ^ max
     -> a       -- ^ initial value
     -> Suave a
-slider label l u = mkInput $ \name v ->
+slider label l u = mkInput parseJSON $ \name v ->
   preEscapedString
     [qc|<tr><td>
         <label for="{name}">{label}</label>
@@ -66,7 +67,7 @@ realSlider
     -> a       -- ^ step
     -> a       -- ^ initial value
     -> Suave a
-realSlider label l u s = mkInput $ \name v ->
+realSlider label l u s = mkInput parseJSON $ \name v ->
   preEscapedString
     [qc|<tr><td>
         <label for="{name}">{label}</label>
@@ -78,7 +79,7 @@ realSlider label l u s = mkInput $ \name v ->
 ------------------------------------------------------------------------------
 -- | Create an input driven by an HTML checkbox.
 checkbox :: String -> Bool -> Suave Bool
-checkbox label = mkInput $ \name v ->
+checkbox label = mkInput parseJSON $ \name v ->
   preEscapedString
     [qc|<tr><td>
         <label for="{name}">{label}</label>
@@ -93,7 +94,7 @@ textbox
     :: String  -- ^ label
     -> String  -- ^ initial value
     -> Suave String
-textbox label = mkInput $ \name v ->
+textbox label = mkInput parseJSON $ \name v ->
   preEscapedString
     [qc|<tr><td>
         <label for="{name}">{label}</label>
@@ -110,7 +111,7 @@ dropdown
     -> [(String, a)]
     -> a
     -> Suave a
-dropdown label opts = mkInput $ \name _ -> preEscapedString $
+dropdown label opts = mkInput parseJSON $ \name _ -> preEscapedString $
   mconcat $
     [ [qc|<tr><td><label for="{name}">{label}</label></td><td>|]
     , [qc|<select id="{name}" onchange="onChangeFunc(event)" autocomplete="off">|]

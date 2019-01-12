@@ -11,7 +11,8 @@ import           Control.Monad.Except (throwError)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.STM (atomically)
 import           Control.Monad.State (evalStateT)
-import           Data.Aeson (FromJSON (..), decode, fromJSON, Result (..))
+import           Data.Aeson (Value, decode, Result (..))
+import           Data.Aeson.Types (Parser, parse)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.Map.Strict as M
 import           Data.Proxy (Proxy (..))
@@ -45,18 +46,18 @@ fromResult (Error s) = error s
 ------------------------------------------------------------------------------
 -- | Construct an '_iFold' field for 'Input's.
 getEvents
-    :: FromJSON a
-    => TVar a  -- ^ The underlying 'TVar' to publish changes to.
+    :: (Value -> Parser a)
+    -> TVar a  -- ^ The underlying 'TVar' to publish changes to.
     -> String  -- ^ The name of the HTML input.
     -> IO ()   -- ^ Publish a change notification.
     -> S.Stream (S.Of ChangeEvent) IO ()
     -> S.Stream (S.Of ChangeEvent) IO ()
-getEvents t n update
+getEvents p t n update
   = S.mapMaybeM (
     \a@(ChangeEvent i z) ->
        case i == n of
           True  -> do
-            liftIO . atomically . writeTVar t . fromResult $ fromJSON z
+            liftIO . atomically . writeTVar t . fromResult $ parse p z
             update
             pure Nothing
           False -> pure $ Just a
@@ -65,8 +66,8 @@ getEvents t n update
 
 ------------------------------------------------------------------------------
 -- | HTML code to inject into all 'Suave' pages.
-htmlPage :: ToMarkup a => String -> a -> Markup
-htmlPage res a = preEscapedString $
+htmlPage :: (a -> Markup) -> String -> a -> Markup
+htmlPage pp res a = preEscapedString $
   [q|
   <style>
   </style>|]
@@ -112,7 +113,7 @@ htmlPage res a = preEscapedString $
   |]
   ++
   [qc|
-  <div id="result">{showMarkup a}</div>
+  <div id="result">{renderMarkup $ pp a}</div>
   <table>
   |]
 
@@ -120,7 +121,7 @@ htmlPage res a = preEscapedString $
 ------------------------------------------------------------------------------
 -- | The API for 'Suave' pages.
 type API = Get '[HTML] Markup
-      :<|> "suavemente" :> WebSocket
+      :<|> "" :> "ws" :> WebSocket
 
 
 ------------------------------------------------------------------------------
@@ -131,9 +132,9 @@ type API2 = Capture "resource" String :> Get '[HTML] Markup
 
 ------------------------------------------------------------------------------
 -- | Run a 'Suave' computation by spinning up its webpage at @localhost:8080@.
-suavemente :: ToMarkup a => Suave a -> IO ()
-suavemente w = do
-  let ws = M.singleton "" $ SomeSuave w
+suavemente :: (a -> Markup) -> Suave a -> IO ()
+suavemente pp w = do
+  let ws = M.singleton "" $ SomeSuave pp w
   run 8080
     . serve (Proxy @API)
     $ htmlHandler ws "" :<|> socketHandler ws ""
@@ -158,10 +159,10 @@ socketHandler
 socketHandler ws s c =
   case M.lookup s ws of
     Nothing -> throwError err404
-    Just (SomeSuave w) -> liftIO $ do
+    Just (SomeSuave pp w) -> liftIO $ do
       Input _ f a <- atomically $ evalStateT (suavely w) 0
       S.effects
-        . f (sendTextData c . B.pack . showMarkup =<< atomically a)
+        . f (sendTextData c . B.pack . renderMarkup . pp =<< atomically a)
         . S.mapM (liftA2 (>>) print pure)
         . S.mapMaybe id
         . S.repeatM
@@ -175,8 +176,8 @@ htmlHandler :: M.Map String SomeSuave -> String -> Handler Markup
 htmlHandler ws res =
   case M.lookup res ws of
     Nothing -> throwError err404
-    Just (SomeSuave w) -> liftIO $ do
+    Just (SomeSuave pp w) -> liftIO $ do
       Input html _ a <- atomically $ evalStateT (suavely w) 0
       a0 <- atomically a
-      pure $ htmlPage res a0 <> html
+      pure $ htmlPage pp res a0 <> html
 

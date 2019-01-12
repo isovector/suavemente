@@ -31,11 +31,11 @@ module Main where
 import Diagrams.Backend.SVG
 import Diagrams.Prelude hiding (rad)
 import Web.Suavemente
-import Web.Suavemente.Orphans
+import Web.Suavemente.Diagrams
 
 
 main :: IO ()
-main = suavemente $ do
+main = suavemente sendDiagram $ do
   rad <- slider "Radius" 1 10 5
   r   <- realSlider "Red" 0 1 0.05 1
   g   <- realSlider "Green" 0 1 0.05 1
@@ -50,4 +50,6 @@ main = suavemente $ do
             # rectEnvelope (p2 (0, 0)) (r2 (20, 20))
     :: Diagram B)
 ```
+
+Hit `localhost:8080` to see it in action!
 

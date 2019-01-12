@@ -27,7 +27,7 @@ instance Applicative Suave where
 ------------------------------------------------------------------------------
 -- | An existentialized 'Suave'.
 data SomeSuave where
-  SomeSuave :: ToMarkup a => Suave a -> SomeSuave
+  SomeSuave :: (a -> Markup) -> Suave a -> SomeSuave
 
 
 ------------------------------------------------------------------------------

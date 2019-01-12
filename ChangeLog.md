@@ -8,3 +8,5 @@ First release!
 
 - New inputs: `dropdown` and `enumDropdown`
 - Add a proper JSON message stream
+- Remove `ToMarkup` constraint from `suavemente`
+- Added support for multiple endpoints via `suavementely`
