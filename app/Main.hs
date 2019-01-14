@@ -7,7 +7,6 @@ module Main where
 
 import Data.Bool
 import Diagrams.Backend.SVG
-import Data.Colour.SRGB (sRGB24read)
 import Diagrams.Prelude hiding (rad)
 import Web.Suavemente
 import Web.Suavemente.Diagrams

@@ -10,3 +10,5 @@ First release!
 - Add a proper JSON message stream
 - Remove `ToMarkup` constraint from `suavemente`
 - Added support for multiple endpoints via `suavementely`
+- Added a color picker element (thanks to @tonyday567)
+
