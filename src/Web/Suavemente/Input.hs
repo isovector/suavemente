@@ -16,7 +16,7 @@ import           Text.Blaze (preEscapedString, Markup, ToMarkup (..))
 import           Text.InterpolatedString.Perl6 (qc, q)
 import           Web.Suavemente.Core
 import           Web.Suavemente.Types
-
+import           Web.Suavemente.Orphans
 
 ------------------------------------------------------------------------------
 -- | Generate a new name for an HTML element.
@@ -76,7 +76,6 @@ realSlider label l u s = mkInput parseJSON $ \name v ->
         </td><td>
         <input id="{name}" oninput="onChangeFunc(event)" type="range" min="{showMarkup l}" max="{showMarkup u}" step="{showMarkup s}" value="{showMarkup v}" autocomplete="off">
         </td></tr>|]
-
 
 ------------------------------------------------------------------------------
 -- | Create an input driven by the HTML input, type=color.
