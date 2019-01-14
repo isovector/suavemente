@@ -7,9 +7,11 @@ import           Control.Arrow ((&&&))
 import           Control.Concurrent.STM.TVar (newTVar, readTVar)
 import           Control.Monad.State.Class (MonadState (..), modify)
 import           Control.Monad.Trans.Class (lift)
-import           Data.Aeson (FromJSON (..), Value)
+import           Data.Aeson (FromJSON (..), Value, withText)
 import           Data.Aeson.Types (Parser)
 import           Data.Bool (bool)
+import           Data.Colour.SRGB (Colour, sRGB24show, sRGB24read)
+import           Data.Text (unpack)
 import           Text.Blaze (preEscapedString, Markup, ToMarkup (..))
 import           Text.InterpolatedString.Perl6 (qc, q)
 import           Web.Suavemente.Core
@@ -75,6 +77,24 @@ realSlider label l u s = mkInput parseJSON $ \name v ->
         <input id="{name}" oninput="onChangeFunc(event)" type="range" min="{showMarkup l}" max="{showMarkup u}" step="{showMarkup s}" value="{showMarkup v}" autocomplete="off">
         </td></tr>|]
 
+
+------------------------------------------------------------------------------
+-- | Create an input driven by the HTML input, type=color.
+colorPicker
+    :: (Ord a, Floating a, RealFrac a)
+    => String   -- ^ label
+    -> Colour a -- ^ initial value
+    -> Suave (Colour a)
+colorPicker label =
+  mkInput
+  (withText "hex colour representation" (pure . sRGB24read . unpack)) $
+  \name v ->
+    preEscapedString
+    [qc|<tr><td>
+        <label for="{name}">{label}</label>
+        </td><td>
+        <input id="{name}" oninput="onChangeFunc(event)" type="color" value="{sRGB24show v}">
+        </td></tr>|]
 
 ------------------------------------------------------------------------------
 -- | Create an input driven by an HTML checkbox.

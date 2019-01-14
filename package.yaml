@@ -23,6 +23,7 @@ dependencies:
 - aeson
 - blaze-markup
 - bytestring
+- colour
 - containers
 - diagrams-core
 - diagrams-lib
@@ -37,10 +38,10 @@ dependencies:
 - stm
 - streaming
 - svg-builder
+- text
 - transformers
 - warp
 - websockets
-
 
 library:
   source-dirs: src

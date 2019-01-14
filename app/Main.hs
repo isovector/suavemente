@@ -7,10 +7,10 @@ module Main where
 
 import Data.Bool
 import Diagrams.Backend.SVG
+import Data.Colour.SRGB (sRGB24read)
 import Diagrams.Prelude hiding (rad)
 import Web.Suavemente
 import Web.Suavemente.Diagrams
-
 
 main :: IO ()
 main = suavemente sendDiagram $ do
@@ -20,21 +20,18 @@ main = suavemente sendDiagram $ do
            , ("Circle", "2")
            , ("Star", "3")
            ] ("0" :: String)
-  rad <- slider "Radius" 1 10 5
+  rad <- realSlider "Radius" 1 10 0.1 5
   n   <- slider "Polys" 5 12 5
-  r   <- realSlider "Red" 0 1 0.05 0.5
-  g   <- realSlider "Green" 0 1 0.05 1
-  b   <- realSlider "Blue" 0 1 0.05 1
+  c   <- colorPicker "Color" (sRGB 0.5 0.15 0.3)
   x   <- slider "X" 0 20 10
   y   <- slider "Y" 0 20 10
 
   pure (
     getShape sq rad n
-            # fc (sRGB r g b)
+            # fc c
             # translate (r2 (x, y))
             # rectEnvelope (p2 (0, 0)) (r2 (20, 20))
     :: Diagram B)
-
 
 getShape :: String -> Double -> Int -> Diagram B
 getShape "0" rad z = triangle $ rad * 2

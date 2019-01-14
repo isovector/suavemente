@@ -13,6 +13,7 @@ module Web.Suavemente
   , realSlider
   , dropdown
   , enumDropdown
+  , colorPicker
 
     -- * Making New Inputs
   , mkInput
