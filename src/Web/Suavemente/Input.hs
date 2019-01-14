@@ -16,7 +16,6 @@ import           Text.Blaze (preEscapedString, Markup, ToMarkup (..))
 import           Text.InterpolatedString.Perl6 (qc, q)
 import           Web.Suavemente.Core
 import           Web.Suavemente.Types
-import           Web.Suavemente.Orphans
 
 ------------------------------------------------------------------------------
 -- | Generate a new name for an HTML element.
