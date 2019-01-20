@@ -124,19 +124,20 @@ textbox label = mkInput parseJSON $ \name v ->
 ------------------------------------------------------------------------------
 -- | Create an input driven by an HTML select.
 dropdown
-    :: (FromJSON a, ToMarkup a)
+    :: (FromJSON a, ToMarkup a, Eq a)
     => String  -- ^ label
     -> [(String, a)]
     -> a
     -> Suave a
-dropdown label opts = mkInput parseJSON $ \name _ -> preEscapedString $
+dropdown label opts = mkInput parseJSON $ \name d -> preEscapedString $
   mconcat $
     [ [qc|<tr><td><label for="{name}">{label}</label></td><td>|]
     , [qc|<select id="{name}" onchange="onChangeFunc(event)" autocomplete="off">|]
     ] ++
-    fmap (\(oname, oval) -> [qc|<option value="{showMarkup oval}">{oname}</option>|])
-         opts
-      ++
+      fmap
+        (\(oname, oval) -> [qc|<option {if oval == d then "selected" else ""} value="{showMarkup oval}" >{oname}</option>|])
+        opts
+    ++
     [ [q|</select>|]
     , [q|</td></tr>|]
     ]
@@ -145,7 +146,7 @@ dropdown label opts = mkInput parseJSON $ \name _ -> preEscapedString $
 ------------------------------------------------------------------------------
 -- | Create an input for enums driven by an HTML select.
 enumDropdown
-    :: (FromJSON a, ToMarkup a, Enum a, Bounded a)
+    :: (FromJSON a, ToMarkup a, Enum a, Bounded a, Eq a)
     => String  -- ^ label
     -> a
     -> Suave a
