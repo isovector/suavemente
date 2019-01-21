@@ -1,8 +1,14 @@
 # suavemente
 
-[![Build Status](https://travis-ci.org/isovector/suavemente.svg?branch=master)](https://travis-ci.org/isovector/suavemente) | [Hackage][hackage]
+[![Build Status](https://travis-ci.org/isovector/suavemente.svg?branch=master)][build]
+[![Hackage](https://img.shields.io/hackage/v/suavemente.svg)][hackage]
+[![Stackage LTS](https://www.stackage.org/package/suavemente/badge/lts)][stackage]
+[![Stackage Nightly](https://www.stackage.org/package/suavemente/badge/nightly)][nightly]
 
+[build]: https://travis-ci.org/isovector/suavemente
 [hackage]: https://hackage.haskell.org/package/suavemente
+[stackage]: http://stackage.org/lts/package/suavemente
+[nightly]: http://stackage.org/nightly/package/suavemente
 
 ## Dedication
 
