@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE QuasiQuotes      #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -214,19 +215,9 @@ div' cl st = markupF (\x ->
 display :: Bool -> String
 display b = "display:" ++ bool "none" "block" b
 
--- | apply a checkbox that turns a Suave a into a Suave (Maybe a)
-maybeInput :: String -> Bool -> Suave a -> Suave (Maybe a)
-maybeInput label start sa =
-  (\c a -> bool Nothing (Just a) c) <$>
-  checkboxShow label "wrap" start <*>
-  div' "wrap" (display start) sa
-
-{-
--- | not sure how to use ApplicativeDo here
--- No instance for (Monad Suave) arising from a do statement
-maybeInput2 :: String -> Bool -> Suave a -> Suave (Maybe a)
-maybeInput2 label start sa = do
-  a <- div' "wrap" (display start) sa
-  c <- checkboxShow label "wrap" start
-  pure (bool Nothing (Just a) c)
--}
+-- | A checkbox that toggles visibility of another input (Suave a)
+toggleInput :: String -> Bool -> String -> Suave a -> Suave (Bool, a)
+toggleInput label start cl sa = do
+  a <- div' cl (display start) sa
+  c <- checkboxShow label cl start
+  pure (c,a)
