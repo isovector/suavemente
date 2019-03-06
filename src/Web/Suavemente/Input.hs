@@ -1,5 +1,7 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE QuasiQuotes      #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Web.Suavemente.Input where
 
@@ -105,6 +107,15 @@ checkbox label = mkInput parseJSON $ \name v ->
         <input id="{name}" onchange="onChangeFunc(event)" type="checkbox" {bool ("" :: String) "checked='checked'" v} autocomplete="off">
         </td></tr>|]
 
+------------------------------------------------------------------------------
+-- | Create an input driven by an HTML checkbox without table tags.
+checkbox_ :: String -> Bool -> Suave Bool
+checkbox_ label = mkInput parseJSON $ \name v ->
+  preEscapedString
+    [qc|
+        <label for="{name}">{label}</label>
+        <input id="{name}" onchange="onChangeFunc(event)" type="checkbox" {bool ("" :: String) "checked='checked'" v} autocomplete="off">
+        |]
 
 ------------------------------------------------------------------------------
 -- | Create an input driven by an HTML textbox.
@@ -120,6 +131,18 @@ textbox label = mkInput parseJSON $ \name v ->
         <input id="{name}" oninput="onChangeFunc(event)" type="text" value="{v}" autocomplete="off">
         </td></tr>|]
 
+------------------------------------------------------------------------------
+-- | Create an input driven by an HTML textbox without table tags.
+textbox_
+    :: String  -- ^ label
+    -> String  -- ^ initial value
+    -> Suave String
+textbox_ label = mkInput parseJSON $ \name v ->
+  preEscapedString
+    [qc|
+        <label for="{name}">{label}</label>
+        <input id="{name}" oninput="onChangeFunc(event)" type="text" value="{v}" autocomplete="off">
+        |]
 
 ------------------------------------------------------------------------------
 -- | Create an input driven by an HTML select.
@@ -153,3 +176,49 @@ enumDropdown
 enumDropdown label =
   dropdown label $ fmap (showMarkup &&& id) [minBound .. maxBound]
 
+------------------------------------------------------------------------------
+-- | A checkbox that turns off a class display
+checkboxShow :: String -> String -> Bool -> Suave Bool
+checkboxShow label cl =
+  mkInput parseJSON $ \name v ->
+  preEscapedString (showJs cl) <>
+  preEscapedString [qc|
+     <label for="{name}">{label}</label>
+     <input id="{name}" onchange="showJs('{cl}','{name}');onChangeFunc(event)" type="checkbox" {bool ("" :: String) "checked='checked'" v} autocomplete="off">
+     |]
+
+-- | js to show/hide a class based on a checkbox
+showJs :: String -> String
+showJs cl =
+  [qc|
+     <script>
+        function showJs (cl, box) \{
+          var vis = (document.getElementById(box).checked) ? "block" : "none";
+          Array.from(document.getElementsByClassName("{cl}")).forEach(x => x.style.display = vis);
+        };
+     </script>
+  |]
+
+-- | Modify the markup of a Suave
+markupF :: (Markup -> Markup) -> Suave a -> Suave a
+markupF f (Suave sa) = Suave $ do
+  Input markup s v <- sa
+  pure $ Input (f markup) s v
+
+-- | Wrap in a div
+div' :: String -> String -> Suave a -> Suave a
+div' cl st = markupF (\x ->
+  preEscapedString [qc|<div class="{cl}" style="{st}">|] <>
+  x <>
+  preEscapedString "</div>")
+
+-- | show/hide style string
+display :: Bool -> String
+display b = "display:" ++ bool "none" "block" b
+
+-- | A checkbox that toggles visibility of another input (Suave a)
+toggleInput :: String -> Bool -> String -> Suave a -> Suave (Bool, a)
+toggleInput label start cl sa = do
+  a <- div' cl (display start) sa
+  c <- checkboxShow label cl start
+  pure (c,a)

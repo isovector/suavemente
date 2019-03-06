@@ -10,9 +10,28 @@ import Diagrams.Backend.SVG
 import Diagrams.Prelude hiding (rad)
 import Web.Suavemente
 import Web.Suavemente.Diagrams
+import Web.Suavemente.Input
+import Text.Blaze (preEscapedString)
 
 main :: IO ()
-main = suavemente sendDiagram $ do
+main = do
+  putStrLn "Server 👍"
+  putStrLn "point a client to localhost:8080"
+  let t1 = textbox_ "value" "abc"
+  suavementely
+    [ ("test-maybe", SomeSuave (markupTest "A Suave (Bool,String)") $
+          toggleInput "show" True "vis" t1)
+    , ("test-text", SomeSuave (markupTest "Just a wrapped textbox") $
+          div' "wrap" "" t1)
+    , ("example", SomeSuave sendDiagram example)
+    ]
+
+markupTest :: (Show a) => String -> a -> Markup
+markupTest comment =
+  preEscapedString . (++ "</p><hr>") . ((comment ++ "<hr><p>") ++) . show
+
+example :: Suave (QDiagram B V2 Double Any)
+example = do
   sq  <- dropdown "Shape"
            [ ("Triangle", "0")
            , ("Square", "1")
