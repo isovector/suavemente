@@ -16,14 +16,14 @@ import Text.Blaze (preEscapedString)
 main :: IO ()
 main = do
   putStrLn "Server 👍"
-  putStrLn "point a client to localhost:8080"
+  putStrLn "point a client to localhost:8080/example"
   let t1 = textbox_ "value" "abc"
   suavementely
     [ ("test-maybe", SomeSuave (markupTest "A Suave (Bool,String)") $
           toggleInput "show" True "vis" t1)
     , ("test-text", SomeSuave (markupTest "Just a wrapped textbox") $
           div' "wrap" "" t1)
-    , ("example", SomeSuave sendDiagram example)
+    , ("example", SomeSuave (sendDiagram 250) example)
     ]
 
 markupTest :: (Show a) => String -> a -> Markup

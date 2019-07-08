@@ -1,5 +1,5 @@
 name:                suavemente
-version:             0.1.0.0
+version:             0.2.0.0
 github:              "isovector/suavemente"
 license:             BSD3
 author:              "Sandy Maguire"
@@ -46,14 +46,14 @@ dependencies:
 library:
   source-dirs: src
 
-executables:
-  suavemente-exe:
-    main:                Main.hs
-    source-dirs:         app
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - suavemente
+# executables:
+#   suavemente-exe:
+#     main:                Main.hs
+#     source-dirs:         app
+#     ghc-options:
+#     - -threaded
+#     - -rtsopts
+#     - -with-rtsopts=-N
+#     dependencies:
+#     - suavemente
 

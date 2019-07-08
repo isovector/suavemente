@@ -9,10 +9,10 @@ import           Graphics.Svg.Core (renderBS)
 import           Text.Blaze (Markup, unsafeLazyByteString)
 
 
-sendDiagram :: D.Diagram B -> Markup
-sendDiagram
+sendDiagram :: Double -> D.Diagram B -> Markup
+sendDiagram w
   = unsafeLazyByteString
   . renderBS
   . D.renderDia SVG
-                (SVGOptions (D.mkWidth 250) Nothing "" [] True)
+                (SVGOptions (D.mkWidth w) Nothing "" [] True)
 
